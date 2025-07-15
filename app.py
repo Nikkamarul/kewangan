@@ -3,6 +3,20 @@ import pandas as pd
 import datetime
 import os
 
+# === Password Protection ===
+password = st.text_input("Masukkan kata laluan:", type="password")
+if password != "sayang123":
+    st.warning("Akses tidak dibenarkan. Sila masukkan kata laluan yang betul.")
+    st.stop()
+
+# Optional: Hide menu
+st.markdown("""
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    </style>
+""", unsafe_allow_html=True)
+
 # === File paths ===
 GAJI_FILE = "data_gaji.xlsx"
 BELANJA_FILE = "data_belanja.xlsx"
