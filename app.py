@@ -2,8 +2,8 @@ import streamlit as st
 import pandas as pd
 import datetime
 import gspread
-from gspread_dataframe import set_with_dataframe
 from oauth2client.service_account import ServiceAccountCredentials
+from gspread_dataframe import set_with_dataframe
 
 # === Login Setup ===
 USERS = {
@@ -28,6 +28,7 @@ def show_login():
         else:
             st.error("Nama pengguna atau kata laluan salah.")
 
+# === Session check ===
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 
@@ -39,7 +40,8 @@ if not st.session_state["logged_in"]:
 def connect_to_gsheet():
     scope = ["https://spreadsheets.google.com/feeds", 
              "https://www.googleapis.com/auth/drive"]
-
+    
+    # Using Streamlit secrets
     creds_dict = {
         "type": st.secrets["gcp"]["type"],
         "project_id": st.secrets["gcp"]["project_id"],
@@ -52,49 +54,68 @@ def connect_to_gsheet():
         "auth_provider_x509_cert_url": st.secrets["gcp"]["auth_provider_x509_cert_url"],
         "client_x509_cert_url": st.secrets["gcp"]["client_x509_cert_url"]
     }
-
+    
     credentials = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     return gspread.authorize(credentials)
 
+# Initialize connection
+try:
+    gc = connect_to_gsheet()
+    gaji_sheet = gc.open(st.secrets["sheets"]["gaji_sheet_name"]).sheet1
+    belanja_sheet = gc.open(st.secrets["sheets"]["belanja_sheet_name"]).sheet1
+except Exception as e:
+    st.error(f"Gagal sambung ke Google Sheets: {e}")
+    st.stop()
+
+# Load data
 def load_data(sheet):
     records = sheet.get_all_records()
     return pd.DataFrame(records)
 
-def save_data(sheet, df):
-    sheet.clear()
-    set_with_dataframe(sheet, df, include_column_header=True)
-
-# Connect to Google Sheets
-gc = connect_to_gsheet()
-gaji_sheet = gc.open(st.secrets["sheets"]["gaji_sheet_name"]).sheet1
-belanja_sheet = gc.open(st.secrets["sheets"]["belanja_sheet_name"]).sheet1
-
 gaji_data = load_data(gaji_sheet)
 belanja_data = load_data(belanja_sheet)
 
+# Save data
+def save_data(sheet, df):
+    sheet.clear()
+    set_with_dataframe(sheet, df)
+
+# === Streamlit UI ===
 st.set_page_config(page_title="Sistem Kewangan Pok Nik", layout="wide")
 st.title("📊 Sistem Kewangan Bulanan - Pok Nik")
 
+# Sidebar Navigation
 menu = st.sidebar.radio("Menu", ["Isi Gaji", "Catat Belanja", "Simpanan & Laporan"])
 
+# ================= Isi Gaji =================
 if menu == "Isi Gaji":
     st.header("📝 Isi Gaji Bulanan")
 
-    if "edit_gaji" in st.query_params:
-        selected_row = int(st.query_params["edit_gaji"])
+    if "edit_gaji" in st.session_state:
+        selected_row = st.session_state["edit_gaji"]
         row_data = gaji_data.loc[selected_row]
     else:
-        selected_row = "Tambah Baru"
+        selected_row = None
         row_data = {}
 
     with st.form("form_gaji"):
-        tahun = st.number_input("Tahun", 2020, 2100, value=int(row_data.get("Tahun", datetime.datetime.today().year)))
-        nama = st.selectbox("Nama", ["Pok Nik", "Isteri"], index=0 if row_data.get("Nama") != "Isteri" else 1)
-        bulan = st.selectbox("Bulan", ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], index=["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].index(row_data.get("Bulan", "Jan")))
-        gaji_pokok = st.number_input("Gaji Pokok", 0.0, value=float(row_data.get("Gaji Pokok", 0)))
-        elaun = st.number_input("Elaun", 0.0, value=float(row_data.get("Elaun", 0)))
-        ot = st.number_input("OT", 0.0, value=float(row_data.get("OT", 0)))
-        potongan = st.number_input("Potongan", 0.0, value=float(row_data.get("Potongan", 0)))
+        tahun = st.number_input("Tahun", min_value=2020, max_value=2100, 
+                               value=int(row_data.get("Tahun", datetime.datetime.today().year)))
+        nama = st.selectbox("Nama", ["Pok Nik", "Isteri"], 
+                           index=0 if row_data.get("Nama") != "Isteri" else 1)
+        bulan = st.selectbox("Bulan", ["Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+                                      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+                           index=["Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+                                 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].index(
+                                     row_data.get("Bulan", "Jan")))
+        gaji_pokok = st.number_input("Gaji Pokok", min_value=0.0, 
+                                    value=float(row_data.get("Gaji Pokok", 0)))
+        elaun = st.number_input("Elaun", min_value=0.0, 
+                               value=float(row_data.get("Elaun", 0)))
+        ot = st.number_input("OT", min_value=0.0, 
+                            value=float(row_data.get("OT", 0)))
+        potongan = st.number_input("Potongan", min_value=0.0, 
+                                 value=float(row_data.get("Potongan", 0)))
         submitted = st.form_submit_button("Simpan Gaji")
 
         if submitted:
@@ -109,83 +130,77 @@ if menu == "Isi Gaji":
                 "Potongan": potongan,
                 "Gaji Bersih": bersih
             }
-            if selected_row == "Tambah Baru":
+            
+            if selected_row is None:
                 gaji_data = pd.concat([gaji_data, pd.DataFrame([new_row])], ignore_index=True)
             else:
-                for key in new_row:
-                    gaji_data.at[selected_row, key] = new_row[key]
-                del st.query_params["edit_gaji"]
+                gaji_data.loc[selected_row] = new_row
+                del st.session_state["edit_gaji"]
+            
             save_data(gaji_sheet, gaji_data)
             st.success(f"Gaji untuk {nama} bulan {bulan} {tahun} disimpan.")
             st.rerun()
 
     if not gaji_data.empty:
         st.subheader("Rekod Gaji")
-        for i, row in gaji_data.iterrows():
-            cols = st.columns(len(row) + 1)
-            for j, (col_name, value) in enumerate(row.items()):
-                cols[j].markdown(f"**{col_name}**\n{value}")
-            with cols[-1]:
-                if st.button("Kemaskini", key=f"edit_gaji_{i}"):
-                    st.query_params["edit_gaji"] = i
-                    st.rerun()
-                if st.button("Padam", key=f"delete_gaji_{i}"):
-                    gaji_data = gaji_data.drop(index=i).reset_index(drop=True)
-                    save_data(gaji_sheet, gaji_data)
-                    st.rerun()
+        edited_data = st.data_editor(gaji_data, num_rows="dynamic")
+        
+        if st.button("Simpan Perubahan"):
+            save_data(gaji_sheet, edited_data)
+            st.success("Perubahan disimpan!")
+            st.rerun()
 
+# ================= Catat Belanja =================
 elif menu == "Catat Belanja":
     st.header("💸 Catat Perbelanjaan")
 
-    if "edit_belanja" in st.query_params:
-        selected_row = int(st.query_params["edit_belanja"])
+    if "edit_belanja" in st.session_state:
+        selected_row = st.session_state["edit_belanja"]
         row_data = belanja_data.loc[selected_row]
     else:
-        selected_row = "Tambah Baru"
+        selected_row = None
         row_data = {}
 
     with st.form("form_belanja"):
-        tarikh = st.date_input("Tarikh", value=pd.to_datetime(row_data.get("Tarikh", datetime.date.today())))
-        tahun = tarikh.year
-        bulan = tarikh.strftime('%b')
-        kategori = st.selectbox("Kategori", ["Makanan", "Bil", "Minyak", "Loan", "Lain-lain"], index=["Makanan", "Bil", "Minyak", "Loan", "Lain-lain"].index(row_data.get("Kategori", "Makanan")))
+        tarikh = st.date_input("Tarikh", 
+                             value=pd.to_datetime(row_data.get("Tarikh", datetime.date.today())))
+        kategori = st.selectbox("Kategori", 
+                              ["Makanan", "Bil", "Minyak", "Loan", "Lain-lain"],
+                              index=["Makanan", "Bil", "Minyak", "Loan", "Lain-lain"].index(
+                                  row_data.get("Kategori", "Makanan")))
         perkara = st.text_input("Perkara", value=row_data.get("Perkara", ""))
-        jumlah = st.number_input("Jumlah (RM)", 0.0, value=float(row_data.get("Jumlah", 0)))
+        jumlah = st.number_input("Jumlah (RM)", min_value=0.0, 
+                               value=float(row_data.get("Jumlah", 0)))
         submitted = st.form_submit_button("Simpan Belanja")
 
         if submitted:
             new_row = {
                 "Tarikh": tarikh,
-                "Tahun": tahun,
-                "Bulan": bulan,
+                "Tahun": tarikh.year,
+                "Bulan": tarikh.strftime('%b'),
                 "Kategori": kategori,
                 "Perkara": perkara,
                 "Jumlah": jumlah
             }
-            if selected_row == "Tambah Baru":
+            
+            if selected_row is None:
                 belanja_data = pd.concat([belanja_data, pd.DataFrame([new_row])], ignore_index=True)
             else:
-                for key in new_row:
-                    belanja_data.at[selected_row, key] = new_row[key]
-                del st.query_params["edit_belanja"]
+                belanja_data.loc[selected_row] = new_row
+                del st.session_state["edit_belanja"]
+            
             save_data(belanja_sheet, belanja_data)
             st.success("Belanja berjaya disimpan.")
             st.rerun()
 
     if not belanja_data.empty:
         st.subheader("Rekod Belanja")
-        for i, row in belanja_data.iterrows():
-            cols = st.columns(len(row) + 1)
-            for j, (col_name, value) in enumerate(row.items()):
-                cols[j].markdown(f"**{col_name}**\n{value}")
-            with cols[-1]:
-                if st.button("Kemaskini", key=f"edit_belanja_{i}"):
-                    st.query_params["edit_belanja"] = i
-                    st.rerun()
-                if st.button("Padam", key=f"delete_belanja_{i}"):
-                    belanja_data = belanja_data.drop(index=i).reset_index(drop=True)
-                    save_data(belanja_sheet, belanja_data)
-                    st.rerun()
+        edited_data = st.data_editor(belanja_data, num_rows="dynamic")
+        
+        if st.button("Simpan Perubahan", key="save_belanja"):
+            save_data(belanja_sheet, edited_data)
+            st.success("Perubahan disimpan!")
+            st.rerun()
 
 
 elif menu == "Simpanan & Laporan":
