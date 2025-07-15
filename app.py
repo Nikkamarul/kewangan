@@ -39,11 +39,10 @@ credentials = Credentials.from_service_account_info(
 )
 client = gspread.authorize(credentials)
 
-# Google Sheet names
 GAJI_SHEET = "data_gaji"
 BELANJA_SHEET = "data_belanja"
 
-# Ensure sheets exist
+# ===== Fungsi cipta sheet jika tiada =====
 def init_sheet(sheet_name, columns):
     try:
         sh = client.open(sheet_name)
@@ -52,14 +51,24 @@ def init_sheet(sheet_name, columns):
             ws.append_row(columns)
     except gspread.exceptions.SpreadsheetNotFound:
         sh = client.create(sheet_name)
-        sh.share(st.secrets["gcp_service_account"]["client_email"], perm_type='user', role='writer')
         ws = sh.sheet1
         ws.append_row(columns)
+        try:
+            sh.share(
+                st.secrets["gcp_service_account"]["client_email"],
+                perm_type='user',
+                role='writer'
+            )
+        except Exception as e:
+            st.error(f"Ralat ketika share fail: {e}")
+        st.success(f"Google Sheet '{sheet_name}' telah dicipta.")
+        st.write(f"[Buka Sheet ini]({sh.url})")
 
+# Panggil init
 init_sheet(GAJI_SHEET, ["Tahun", "Bulan", "Nama", "Gaji Pokok", "Elaun", "OT", "Potongan", "Gaji Bersih"])
 init_sheet(BELANJA_SHEET, ["Tarikh", "Tahun", "Bulan", "Kategori", "Perkara", "Jumlah"])
 
-# Load Data
+# ===== Load & Save Data =====
 def load_data(sheet_name):
     ws = client.open(sheet_name).sheet1
     df = get_as_dataframe(ws, evaluate_formulas=True).dropna(how='all')
@@ -73,7 +82,7 @@ def save_data(sheet_name, df):
 gaji_data = load_data(GAJI_SHEET)
 belanja_data = load_data(BELANJA_SHEET)
 
-# ===== Streamlit UI =====
+# ===== UI Start =====
 st.set_page_config(page_title="Sistem Kewangan Pok Nik", layout="wide")
 st.title("📊 Sistem Kewangan Bulanan - Pok Nik")
 
@@ -134,6 +143,7 @@ if menu == "Isi Gaji":
                     gaji_data = gaji_data.drop(index=i).reset_index(drop=True)
                     save_data(GAJI_SHEET, gaji_data)
                     st.rerun()
+
 # ===== Catat Belanja =====
 elif menu == "Catat Belanja":
     st.header("💸 Catat Perbelanjaan")
