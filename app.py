@@ -62,7 +62,7 @@ def load_data(sheet):
 
 def save_data(sheet, df):
     sheet.clear()
-    set_with_dataframe(sheet, df)
+    set_with_dataframe(sheet, df, include_column_header=True)
 
 # Connect to Google Sheets
 gc = connect_to_gsheet()
@@ -124,7 +124,7 @@ if menu == "Isi Gaji":
         for i, row in gaji_data.iterrows():
             cols = st.columns(len(row) + 1)
             for j, (col_name, value) in enumerate(row.items()):
-                cols[j].write(value)
+                cols[j].markdown(f"**{col_name}**\n{value}")
             with cols[-1]:
                 if st.button("Kemaskini", key=f"edit_gaji_{i}"):
                     st.query_params["edit_gaji"] = i
@@ -177,7 +177,7 @@ elif menu == "Catat Belanja":
         for i, row in belanja_data.iterrows():
             cols = st.columns(len(row) + 1)
             for j, (col_name, value) in enumerate(row.items()):
-                cols[j].write(value)
+                cols[j].markdown(f"**{col_name}**\n{value}")
             with cols[-1]:
                 if st.button("Kemaskini", key=f"edit_belanja_{i}"):
                     st.query_params["edit_belanja"] = i
@@ -186,6 +186,7 @@ elif menu == "Catat Belanja":
                     belanja_data = belanja_data.drop(index=i).reset_index(drop=True)
                     save_data(belanja_sheet, belanja_data)
                     st.rerun()
+
 
 elif menu == "Simpanan & Laporan":
     st.header("📈 Laporan Simpanan Bulanan")
