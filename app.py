@@ -3,19 +3,36 @@ import pandas as pd
 import datetime
 import os
 
-# === Password Protection ===
-password = st.text_input("Masukkan kata laluan:", type="password")
-if password != "sayang123":
-    st.warning("Akses tidak dibenarkan. Sila masukkan kata laluan yang betul.")
-    st.stop()
+# === Login Setup ===
+USERS = {
+    "poknik": "1234",
+    "isteri": "5678"
+}
 
-# Optional: Hide menu
-st.markdown("""
-    <style>
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    </style>
-""", unsafe_allow_html=True)
+def show_login():
+    st.set_page_config(page_title="Login", layout="centered")
+    st.title("🔐 Login Sistem Kewangan Pok Nik")
+
+    username = st.text_input("Nama Pengguna")
+    password = st.text_input("Kata Laluan", type="password")
+    login_btn = st.button("Login")
+
+    if login_btn:
+        if USERS.get(username) == password:
+            st.session_state["logged_in"] = True
+            st.session_state["user"] = username
+            st.success("Berjaya log masuk.")
+            st.rerun()
+        else:
+            st.error("Nama pengguna atau kata laluan salah.")
+
+# === Session check ===
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
+
+if not st.session_state["logged_in"]:
+    show_login()
+    st.stop()
 
 # === File paths ===
 GAJI_FILE = "data_gaji.xlsx"
