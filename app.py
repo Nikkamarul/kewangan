@@ -1,11 +1,9 @@
 import streamlit as st
 import pandas as pd
 import datetime
-import gspread
-from gspread_dataframe import get_as_dataframe, set_with_dataframe
-from google.oauth2.service_account import Credentials
+import os
 
-# ===== Login Setup =====
+# === Login Setup ===
 USERS = {
     "poknik": "1234",
     "isteri": "5678"
@@ -14,9 +12,12 @@ USERS = {
 def show_login():
     st.set_page_config(page_title="Login", layout="centered")
     st.title("🔐 Login Sistem Kewangan Pok Nik")
+
     username = st.text_input("Nama Pengguna")
     password = st.text_input("Kata Laluan", type="password")
-    if st.button("Login"):
+    login_btn = st.button("Login")
+
+    if login_btn:
         if USERS.get(username) == password:
             st.session_state["logged_in"] = True
             st.session_state["user"] = username
@@ -25,80 +26,57 @@ def show_login():
         else:
             st.error("Nama pengguna atau kata laluan salah.")
 
+# === Session check ===
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
+
 if not st.session_state["logged_in"]:
     show_login()
     st.stop()
+    
+# === File paths ===
+GAJI_FILE = "data_gaji.xlsx"
+BELANJA_FILE = "data_belanja.xlsx"
 
-# ===== Google Sheets Setup =====
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-credentials = Credentials.from_service_account_info(
-    st.secrets["gcp_service_account"],
-    scopes=SCOPES
-)
-client = gspread.authorize(credentials)
+# Create files if not exist
+def init_excel(file_path, columns):
+    if not os.path.exists(file_path):
+        df = pd.DataFrame(columns=columns)
+        df.to_excel(file_path, index=False)
 
-GAJI_SHEET = "data_gaji"
-BELANJA_SHEET = "data_belanja"
+init_excel(GAJI_FILE, ["Tahun", "Bulan", "Nama", "Gaji Pokok", "Elaun", "OT", "Potongan", "Gaji Bersih"])
+init_excel(BELANJA_FILE, ["Tarikh", "Tahun", "Bulan", "Kategori", "Perkara", "Jumlah"])
 
-# ===== Fungsi cipta sheet jika tiada =====
-def init_sheet(sheet_name, columns):
+# Load data
+def load_data(file):
     try:
-        sh = client.open(sheet_name)
-        ws = sh.sheet1
-        if ws.row_count < 2:
-            ws.append_row(columns)
-    except gspread.exceptions.SpreadsheetNotFound:
-        sh = client.create(sheet_name)
-        ws = sh.sheet1
-        ws.append_row(columns)
-        try:
-            sh.share(
-                st.secrets["gcp_service_account"]["client_email"],
-                perm_type='user',
-                role='writer'
-            )
-        except Exception as e:
-            st.error(f"Ralat ketika share fail: {e}")
-        st.success(f"Google Sheet '{sheet_name}' telah dicipta.")
-        st.write(f"[Buka Sheet ini]({sh.url})")
+        return pd.read_excel(file)
+    except:
+        return pd.DataFrame()
 
-# Panggil init
-init_sheet(GAJI_SHEET, ["Tahun", "Bulan", "Nama", "Gaji Pokok", "Elaun", "OT", "Potongan", "Gaji Bersih"])
-init_sheet(BELANJA_SHEET, ["Tarikh", "Tahun", "Bulan", "Kategori", "Perkara", "Jumlah"])
+gaji_data = load_data(GAJI_FILE)
+belanja_data = load_data(BELANJA_FILE)
 
-# ===== Load & Save Data =====
-def load_data(sheet_name):
-    ws = client.open(sheet_name).sheet1
-    df = get_as_dataframe(ws, evaluate_formulas=True).dropna(how='all')
-    return df
-
-def save_data(sheet_name, df):
-    ws = client.open(sheet_name).sheet1
-    ws.clear()
-    set_with_dataframe(ws, df)
-
-gaji_data = load_data(GAJI_SHEET)
-belanja_data = load_data(BELANJA_SHEET)
-
-# ===== UI Start =====
+# === Streamlit UI ===
 st.set_page_config(page_title="Sistem Kewangan Pok Nik", layout="wide")
 st.title("📊 Sistem Kewangan Bulanan - Pok Nik")
 
+# Sidebar Navigation
 menu = st.sidebar.radio("Menu", ["Isi Gaji", "Catat Belanja", "Simpanan & Laporan"])
 
-# ===== Isi Gaji =====
+# ================= Isi Gaji =================
 if menu == "Isi Gaji":
     st.header("📝 Isi Gaji Bulanan")
-    selected_row = st.query_params.get("edit_gaji", ["Tambah Baru"])[0]
-    if selected_row != "Tambah Baru":
-        row_data = gaji_data.loc[int(selected_row)]
+
+    if "edit_gaji" in st.query_params:
+        selected_row = int(st.query_params["edit_gaji"])
+        row_data = gaji_data.loc[selected_row]
     else:
+        selected_row = "Tambah Baru"
         row_data = {}
 
     with st.form("form_gaji"):
-        tahun = st.number_input("Tahun", 2020, 2100, int(row_data.get("Tahun", datetime.datetime.today().year)))
+        tahun = st.number_input("Tahun", min_value=2020, max_value=2100, value=int(row_data.get("Tahun", datetime.datetime.today().year)))
         nama = st.selectbox("Nama", ["Pok Nik", "Isteri"], index=0 if row_data.get("Nama") != "Isteri" else 1)
         bulan = st.selectbox("Bulan", ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"], index=["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].index(row_data.get("Bulan", "Jan")))
         gaji_pokok = st.number_input("Gaji Pokok", min_value=0.0, value=float(row_data.get("Gaji Pokok", 0)))
@@ -123,17 +101,17 @@ if menu == "Isi Gaji":
                 gaji_data = pd.concat([gaji_data, pd.DataFrame([new_row])], ignore_index=True)
             else:
                 for key in new_row:
-                    gaji_data.at[int(selected_row), key] = new_row[key]
+                    gaji_data.at[selected_row, key] = new_row[key]
                 del st.query_params["edit_gaji"]
-            save_data(GAJI_SHEET, gaji_data)
-            st.success(f"Gaji disimpan.")
+            gaji_data.to_excel(GAJI_FILE, index=False)
+            st.success(f"Gaji untuk {nama} bulan {bulan} {tahun} disimpan.")
             st.rerun()
 
     if not gaji_data.empty:
         st.subheader("Rekod Gaji")
         for i, row in gaji_data.iterrows():
             cols = st.columns(len(row) + 1)
-            for j, value in enumerate(row.values):
+            for j, (col_name, value) in enumerate(row.items()):
                 cols[j].write(value)
             with cols[-1]:
                 if st.button("Kemaskini", key=f"edit_gaji_{i}"):
@@ -141,16 +119,18 @@ if menu == "Isi Gaji":
                     st.rerun()
                 if st.button("Padam", key=f"delete_gaji_{i}"):
                     gaji_data = gaji_data.drop(index=i).reset_index(drop=True)
-                    save_data(GAJI_SHEET, gaji_data)
+                    gaji_data.to_excel(GAJI_FILE, index=False)
                     st.rerun()
 
-# ===== Catat Belanja =====
+# ================= Catat Belanja =================
 elif menu == "Catat Belanja":
     st.header("💸 Catat Perbelanjaan")
-    selected_row = st.query_params.get("edit_belanja", ["Tambah Baru"])[0]
-    if selected_row != "Tambah Baru":
-        row_data = belanja_data.loc[int(selected_row)]
+
+    if "edit_belanja" in st.query_params:
+        selected_row = int(st.query_params["edit_belanja"])
+        row_data = belanja_data.loc[selected_row]
     else:
+        selected_row = "Tambah Baru"
         row_data = {}
 
     with st.form("form_belanja"):
@@ -175,9 +155,9 @@ elif menu == "Catat Belanja":
                 belanja_data = pd.concat([belanja_data, pd.DataFrame([new_row])], ignore_index=True)
             else:
                 for key in new_row:
-                    belanja_data.at[int(selected_row), key] = new_row[key]
+                    belanja_data.at[selected_row, key] = new_row[key]
                 del st.query_params["edit_belanja"]
-            save_data(BELANJA_SHEET, belanja_data)
+            belanja_data.to_excel(BELANJA_FILE, index=False)
             st.success("Belanja berjaya disimpan.")
             st.rerun()
 
@@ -185,7 +165,7 @@ elif menu == "Catat Belanja":
         st.subheader("Rekod Belanja")
         for i, row in belanja_data.iterrows():
             cols = st.columns(len(row) + 1)
-            for j, value in enumerate(row.values):
+            for j, (col_name, value) in enumerate(row.items()):
                 cols[j].write(value)
             with cols[-1]:
                 if st.button("Kemaskini", key=f"edit_belanja_{i}"):
@@ -193,10 +173,10 @@ elif menu == "Catat Belanja":
                     st.rerun()
                 if st.button("Padam", key=f"delete_belanja_{i}"):
                     belanja_data = belanja_data.drop(index=i).reset_index(drop=True)
-                    save_data(BELANJA_SHEET, belanja_data)
+                    belanja_data.to_excel(BELANJA_FILE, index=False)
                     st.rerun()
 
-# ===== Simpanan & Laporan =====
+# ================= Simpanan & Laporan =================
 elif menu == "Simpanan & Laporan":
     st.header("📈 Laporan Simpanan Bulanan")
     if gaji_data.empty or belanja_data.empty:
