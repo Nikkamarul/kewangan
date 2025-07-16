@@ -165,8 +165,8 @@ elif menu == "Catat Belanja":
         tarikh = st.date_input("Tarikh", 
                              value=pd.to_datetime(row_data.get("Tarikh", datetime.date.today())))
         kategori = st.selectbox("Kategori", 
-                              ["Makanan", "Bil", "Minyak", "Loan", "Lain-lain"],
-                              index=["Makanan", "Bil", "Minyak", "Loan", "Lain-lain"].index(
+                              ["Makanan", "Bil", "Minyak", "Loan", "Shopping", "Lain-lain"],
+                              index=["Makanan", "Bil", "Minyak", "Loan", "Shopping", "Lain-lain"].index(
                                   row_data.get("Kategori", "Makanan")))
         perkara = st.text_input("Perkara", value=row_data.get("Perkara", ""))
         jumlah = st.number_input("Jumlah (RM)", min_value=0.0, 
