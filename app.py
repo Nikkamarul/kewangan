@@ -13,7 +13,7 @@ USERS = {
 
 def show_login():
     st.set_page_config(page_title="Login", layout="centered")
-    st.title("🔐 Login Sistem Kewangan Keluarga Pok Nik")
+    st.title("🔐 Login Sistem Kewangan Keluarga asal Pok Nik")
 
     username = st.text_input("Nama Pengguna")
     password = st.text_input("Kata Laluan", type="password")
