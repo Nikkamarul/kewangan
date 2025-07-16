@@ -257,6 +257,7 @@ elif menu == "Simpanan & Laporan":
             bulan_selected = st.selectbox("Bulan", bulan_list)
             target_simpanan = st.number_input("🎯 Sasaran Simpanan Bulanan (RM)", 0.0, value=1000.0)
 
+        # Filter data
         filtered_gaji = gaji_data[gaji_data['Tahun'] == tahun_selected]
         filtered_belanja = belanja_data[belanja_data['Tahun'] == tahun_selected]
 
@@ -267,6 +268,7 @@ elif menu == "Simpanan & Laporan":
             filtered_gaji = filtered_gaji[filtered_gaji['Bulan'] == bulan_selected]
             filtered_belanja = filtered_belanja[filtered_belanja['Bulan'] == bulan_selected]
 
+        # Grouping
         gaji_grouped = filtered_gaji.groupby(['Tahun', 'Bulan'])['Gaji Bersih'].sum()
         belanja_grouped = filtered_belanja.groupby(['Tahun', 'Bulan'])['Jumlah'].sum()
 
@@ -283,15 +285,27 @@ elif menu == "Simpanan & Laporan":
         laporan = laporan.set_index('BulanPenuh')
 
         st.dataframe(laporan)
+        st.caption("Data ditapis berdasarkan pilihan tahun, bulan dan nama di atas.")
 
-        st.subheader("💰 Carta Simpanan")
+        # Dynamic subtitle
+        subtitle = f"{bulan_selected} {tahun_selected}" if bulan_selected != "Semua" else f"{tahun_selected} (Semua Bulan)"
+
+        # Bar Chart
+        st.subheader(f"💰 Carta Simpanan Bar ({subtitle})")
         st.bar_chart(laporan[['Simpanan', 'Sasaran Simpanan']])
 
-        st.subheader("📊 Peratus Belanja Mengikut Kategori")
-        kategori_chart = filtered_belanja.groupby('Kategori')['Jumlah'].sum()
+        # 📈 Line Chart with Simpanan + Sasaran + Belanja
+        st.subheader(f"📈 Carta Garisan Simpanan & Belanja ({subtitle})")
+        st.line_chart(laporan[['Simpanan', 'Sasaran Simpanan', 'Jumlah Belanja']])
+
+
+        # Pie Chart
+        st.subheader(f"📊 Peratus Belanja Mengikut Kategori ({subtitle})")
+        kategori_chart = filtered_belanja.groupby('Kategori')['Jumlah'].sum().sort_values(ascending=False)
         st.pyplot(kategori_chart.plot.pie(autopct='%1.1f%%', ylabel='', title='Perbelanjaan Ikut Kategori').figure)
 
-        st.subheader("📋 Ringkasan Tahunan")
+        # Ringkasan
+        st.subheader(f"📋 Ringkasan ({subtitle})")
         total_gaji = filtered_gaji['Gaji Bersih'].sum()
         total_belanja = filtered_belanja['Jumlah'].sum()
         total_simpanan = total_gaji - total_belanja
