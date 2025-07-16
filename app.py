@@ -6,10 +6,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 from gspread_dataframe import set_with_dataframe
 
 # === Login Setup ===
-USERS = {
-    "poknik": "1234",
-    "isteri": "5678"
-}
+USERS = st.secrets["users"]
 
 def show_login():
     st.set_page_config(page_title="Login", layout="centered")
@@ -27,6 +24,7 @@ def show_login():
             st.rerun()
         else:
             st.error("Nama pengguna atau kata laluan salah.")
+
 
 # === Session check ===
 if "logged_in" not in st.session_state:
