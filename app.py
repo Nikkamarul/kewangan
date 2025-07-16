@@ -143,10 +143,30 @@ if menu == "Isi Gaji":
 
     if not gaji_data.empty:
         st.subheader("Rekod Gaji")
-        edited_data = st.data_editor(gaji_data, num_rows="dynamic")
-        
+        # Dropdown filters
+        unique_years = sorted(gaji_data["Tahun"].unique(), reverse=True)
+        unique_months = list(gaji_data["Bulan"].unique())
+
+
+        col1, col2 = st.columns(2)
+        with col1:
+            selected_year = st.selectbox("Pilih Tahun", unique_years, index=0)
+        with col2:
+            selected_month = st.selectbox("Pilih Bulan", unique_months, index=0)
+
+        # Apply filters
+        filtered_data = gaji_data[
+            (gaji_data["Tahun"] == selected_year) &
+            (gaji_data["Bulan"] == selected_month)
+        ]
+
+        edited_data = st.data_editor(filtered_data, num_rows="dynamic")
+
         if st.button("Simpan Perubahan"):
-            save_data(gaji_sheet, edited_data)
+            for i, row in filtered_data.iterrows():
+                gaji_data.loc[i] = row
+
+            save_data(gaji_sheet, gaji_data)
             st.success("Perubahan disimpan!")
             st.rerun()
 
@@ -195,10 +215,29 @@ elif menu == "Catat Belanja":
 
     if not belanja_data.empty:
         st.subheader("Rekod Belanja")
-        edited_data = st.data_editor(belanja_data, num_rows="dynamic")
         
+        unique_years = sorted(belanja_data["Tahun"].unique(), reverse=True)
+        unique_months = list(belanja_data["Bulan"].unique())
+
+        col1, col2 = st.columns(2)
+        with col1:
+            selected_year = st.selectbox("Pilih Tahun", unique_years, index=0)
+        with col2:
+            selected_month = st.selectbox("Pilih Bulan", unique_months, index=0)
+
+        filtered_data = belanja_data[
+            (belanja_data["Tahun"] == selected_year) &
+            (belanja_data["Bulan"] == selected_month)
+        ]
+
+        edited_data = st.data_editor(filtered_data, num_rows="dynamic")
+
         if st.button("Simpan Perubahan", key="save_belanja"):
-            save_data(belanja_sheet, edited_data)
+            # Save the changes only to the original belanja_data
+            for i, row in filtered_data.iterrows():
+                belanja_data.loc[i] = row
+
+            save_data(belanja_sheet, belanja_data)
             st.success("Perubahan disimpan!")
             st.rerun()
 
