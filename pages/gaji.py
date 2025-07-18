@@ -50,13 +50,13 @@ def show_gaji_page():
             bersih = gaji_pokok + elaun + ot - potongan
             new_row = {
                 "Tahun": tahun,
-                "Bulan": bulan,
-                "Nama": nama,
-                "Gaji Pokok": gaji_pokok,
-                "Elaun": elaun,
-                "OT": ot,
-                "Potongan": potongan,
-                "Gaji Bersih": bersih
+                "bulan": bulan,
+                "nama": nama,
+                "gaji_pokok": gaji_pokok,
+                "elaun": elaun,
+                "ot": ot,
+                "potongan": potongan,
+                "gaji_bersih": bersih
             }
             
             if is_edit_mode:
@@ -73,8 +73,8 @@ def show_gaji_page():
         st.subheader("Rekod Gaji")
         
         # Filter options
-        unique_years = sorted(gaji_data["Tahun"].unique(), reverse=True)
-        unique_months = list(gaji_data["Bulan"].unique())
+        unique_years = sorted(gaji_data["tahun"].unique(), reverse=True)
+        unique_months = list(gaji_data["bulan"].unique())
 
         col1, col2 = st.columns(2)
         with col1:
@@ -84,28 +84,39 @@ def show_gaji_page():
 
         # Apply filters
         filtered_data = gaji_data[
-            (gaji_data["Tahun"] == selected_year) & 
-            (gaji_data["Bulan"] == selected_month)
+            (gaji_data["tahun"] == selected_year) & 
+            (gaji_data["bulan"] == selected_month)
         ].copy()
 
-        # Add action buttons
-        filtered_data["Action"] = ["🗑️|✏️"] * len(filtered_data)
+        # Add action buttons column
+        filtered_data["tindakan"] = ""
+        
+        # Display data with action column
         edited_data = st.data_editor(
-            filtered_data.drop(columns=["Action"]),
-            disabled=list(filtered_data.columns),
-            hide_index=True
+            filtered_data,
+            column_config={
+                "tindakan": st.column_config.Column(
+                    "Tindakan",
+                    width="medium",
+                    disabled=False
+                )
+            },
+            hide_index=True,
+            disabled=["tahun", "bulan", "nama", "gaji_pokok", "elaun", "ot", "potongan", "gaji_bersih"],
+            key="gaji_editor"
         )
 
         # Handle actions
-        for i, row in filtered_data.iterrows():
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button(f"Padam", key=f"delete_{i}"):
-                    gaji_data = gaji_data.drop(index=i)
-                    save_data(st.session_state.sheets["gaji"], gaji_data)
-                    st.success("Rekod berjaya dipadam!")
-                    st.rerun()
-            with col2:
-                if st.button(f"Edit", key=f"edit_{i}"):
-                    st.session_state["edit_gaji"] = i
-                    st.rerun()
+        if "gaji_editor" in st.session_state:
+            edited_rows = st.session_state["gaji_editor"]["edited_rows"]
+            for row_idx, actions in edited_rows.items():
+                if "tindakan" in actions:
+                    action = actions["tindakan"]
+                    if "✏️" in action:
+                        st.session_state["edit_gaji"] = filtered_data.index[row_idx]
+                        st.rerun()
+                    elif "🗑️" in action:
+                        gaji_data = gaji_data.drop(index=filtered_data.index[row_idx])
+                        save_data(st.session_state.sheets["gaji"], gaji_data)
+                        st.success("Rekod berjaya dipadam!")
+                        st.rerun()
