@@ -5,8 +5,40 @@ from gsheets import load_data
 def show_laporan_page():
     st.header("📈 Laporan Simpanan Bulanan")
     sheets = st.session_state["sheets"]
+    
+    # Load and standardize data
     gaji_data = load_data(sheets["gaji"])
     belanja_data = load_data(sheets["belanja"])
+    
+    # Standardize column names for gaji data
+    gaji_columns = {
+        'Tahun': ['Tahun', 'tahun', 'year'],
+        'Bulan': ['Bulan', 'bulan', 'month'],
+        'Nama': ['Nama', 'nama', 'name'],
+        'Gaji Bersih': ['Gaji Bersih', 'gaji_bersih', 'Net Salary']
+    }
+    
+    # Standardize column names for belanja data
+    belanja_columns = {
+        'Tahun': ['Tahun', 'tahun', 'year'],
+        'Bulan': ['Bulan', 'bulan', 'month'],
+        'Kategori': ['Kategori', 'kategori', 'category'],
+        'Jumlah': ['Jumlah', 'jumlah', 'amount']
+    }
+    
+    # Rename columns in gaji data
+    for standard_name, possible_names in gaji_columns.items():
+        for name in possible_names:
+            if name in gaji_data.columns:
+                gaji_data = gaji_data.rename(columns={name: standard_name})
+                break
+    
+    # Rename columns in belanja data
+    for standard_name, possible_names in belanja_columns.items():
+        for name in possible_names:
+            if name in belanja_data.columns:
+                belanja_data = belanja_data.rename(columns={name: standard_name})
+                break
 
     if gaji_data.empty or belanja_data.empty:
         st.warning("Sila isi data gaji dan belanja terlebih dahulu.")
@@ -29,8 +61,12 @@ def show_laporan_page():
         filtered_gaji = filtered_gaji[filtered_gaji['Nama'] == nama_selected]
 
     if bulan_selected != "Semua":
-        filtered_gaji = filtered_gaji[filtered_gaji['Bulan'] == bulan_selected]
-        filtered_belanja = filtered_belanja[filtered_belanja['Bulan'] == bulan_selected]
+        bulan_map = {"Jan": "Jan", "Feb": "Feb", "Mac": "Mar", "Apr": "Apr", 
+                    "Mei": "May", "Jun": "Jun", "Jul": "Jul", "Ogos": "Aug",
+                    "Sep": "Sep", "Okt": "Oct", "Nov": "Nov", "Dis": "Dec"}
+        bulan_value = bulan_map.get(bulan_selected, bulan_selected)
+        filtered_gaji = filtered_gaji[filtered_gaji['Bulan'] == bulan_value]
+        filtered_belanja = filtered_belanja[filtered_belanja['Bulan'] == bulan_value]
 
     # Grouping and calculations
     gaji_grouped = filtered_gaji.groupby(['Tahun', 'Bulan'])['Gaji Bersih'].sum()
@@ -40,6 +76,7 @@ def show_laporan_page():
         "Jumlah Gaji Bersih": gaji_grouped,
         "Jumlah Belanja": belanja_grouped
     }).fillna(0)
+    
     laporan['Simpanan'] = laporan['Jumlah Gaji Bersih'] - laporan['Jumlah Belanja']
     laporan['Sasaran Simpanan'] = target_simpanan
     laporan['Beza dengan Sasaran'] = laporan['Simpanan'] - target_simpanan
@@ -48,7 +85,13 @@ def show_laporan_page():
     laporan['BulanPenuh'] = laporan['Tahun'].astype(str) + "-" + laporan['Bulan']
     laporan = laporan.set_index('BulanPenuh')
 
-    st.dataframe(laporan)
+    # Format display
+    display_cols = ['Jumlah Gaji Bersih', 'Jumlah Belanja', 'Simpanan', 
+                   'Sasaran Simpanan', 'Beza dengan Sasaran']
+    formatted_laporan = laporan[display_cols].copy()
+    formatted_laporan[display_cols] = formatted_laporan[display_cols].applymap(lambda x: f"RM {x:,.2f}")
+
+    st.dataframe(formatted_laporan)
     st.caption("Data ditapis berdasarkan pilihan tahun, bulan dan nama di atas.")
 
     # Dynamic subtitle
@@ -61,9 +104,10 @@ def show_laporan_page():
     st.subheader(f"📈 Carta Garisan Simpanan & Belanja ({subtitle})")
     st.line_chart(laporan[['Simpanan', 'Sasaran Simpanan', 'Jumlah Belanja']])
 
-    st.subheader(f"📊 Peratus Belanja Mengikut Kategori ({subtitle})")
-    kategori_chart = filtered_belanja.groupby('Kategori')['Jumlah'].sum().sort_values(ascending=False)
-    st.pyplot(kategori_chart.plot.pie(autopct='%1.1f%%', ylabel='', title='Perbelanjaan Ikut Kategori').figure)
+    if not filtered_belanja.empty:
+        st.subheader(f"📊 Peratus Belanja Mengikut Kategori ({subtitle})")
+        kategori_chart = filtered_belanja.groupby('Kategori')['Jumlah'].sum().sort_values(ascending=False)
+        st.pyplot(kategori_chart.plot.pie(autopct='%1.1f%%', ylabel='', title='Perbelanjaan Ikut Kategori').figure)
 
     st.subheader(f"📋 Ringkasan ({subtitle})")
     total_gaji = filtered_gaji['Gaji Bersih'].sum()
